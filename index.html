@@ -1,0 +1,184 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<!--
+     ____  _      _          _   _   _     _                       
+    |  _ \(_) ___| |__      / \ | |_| | __(_)_ __  ___  ___  _ __  
+    | |_) | |/ __| '_ \    / _ \| __| |/ /| | '_ \/ __|/ _ \| '_ \ 
+    |  _ <| | (__| | | |  / ___ \ |_|   < | | | | \__ \ (_) | | | |
+    |_| \_\_|\___|_| |_| /_/   \_\__|_|\_\|_|_| |_|___/\___/|_| |_|
+
+    (c) Rich Atkinson 2011 All Rights Reserved - Distibuted under BSD License.
+
+    Redistribution and use in source and binary forms, with or without 
+    modification, are permitted provided that the following conditions are met:
+
+    Redistributions of source code must retain the above copyright notice,
+    this list of conditions and the following disclaimer.
+
+    Redistributions in binary form must reproduce the above copyright notice,
+    this list of conditions and the following disclaimer in the documentation
+    and/or other materials provided with the distribution.
+
+    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+    AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+    IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+    ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+    LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+    CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+    SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+    INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+    CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+    ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
+    THE POSSIBILITY OF SUCH DAMAGE.
+-->
+<html>
+    <head>
+        <meta name="viewport" content="width=default-width; user-scalable=no" />
+        <meta http-equiv="Content-type" content="text/html; charset=utf-8"/>
+    
+    <title>Load WebSQL Database from text file of SQL statements;</title>
+
+    <style type="text/css">
+        body, html { background-color: #444444; }
+        
+        #wrapper {
+            position:relative;
+            z-index:1;
+            width: 100%;        /* your desired width, auto and 100% are fine */
+            height: 200px;      /* element height */
+            overflow: hidden;   /* hidden|auto|scroll */
+        }
+    </style>
+    
+    
+    <script type="text/javascript" charset="utf-8" src="phonegap.js"></script>
+    <script type="text/javascript" charset="utf-8">
+
+        // IMPORTANT: A relative path is required by phonegap!
+        var SQL_DUMP_FILE = "./../MyPhonegapApp.app/www/dump.sql";
+        
+        database = {
+            /* open the database and return a reference to it
+             If the database doesn't exist yet, create it. */
+            init: function()
+            {
+                console.log('initDatabase()');
+                try
+                {
+                    if (!window.openDatabase)
+                    {
+                        console.log('not supported');
+                    }
+                    else
+                    {			
+                        var bytes = 5 * 1024 * 1024;
+                        db = openDatabase('color', '1.0', 'Color Schemes', bytes);
+                    }
+                } 
+                catch(e)
+                {
+                    // Error handling code goes here.
+                    if (e == 2)
+                    {
+                        // Version number mismatch.
+                        console.log("Invalid database version.");
+                    }
+                    else 
+                    {
+                        console.log("database.init error "+e+".");
+                    }
+                    return null;
+                }
+            },
+
+            /* Takes the *filename* which represents a text file
+               made by issuing the command "sqlite .dump <database_name>".
+               
+               Then splits the string into an array of strings, each elt is
+               an individual SQL statment (without the trailing ';') 
+               
+               Finally, execute the callback if provided
+            */
+            read_file: function(filename, callback)
+            {
+                /* Drop and recreate database */
+                var reader = new FileReader();
+                reader.onload = function(evt)
+                {
+                    var lines = evt.target.result.split(';');
+                    callback && callback(lines);
+                    callback || console.log('no callback provided');			
+                };
+                
+                reader.onerror = function(evt)
+                {
+                    console.log('fail');
+                    console.log(evt.target);
+                };
+                
+                reader.readAsText( filename );
+            },
+            
+            /* Transaction Error Callback */
+            error_callback: function(error)
+            {
+                console.log('Oops. '+error.message+' (Code '+error.code+')');
+            },
+            
+            tx_results_callback: function(tx, results)
+            {
+                console.log('Results: '+ JSON.stringify(tx));
+            },		
+            
+            /* This is used as a data handler for a request that should return no data. */
+            success_callback: function()
+            {
+                console.log('apparently we have a success!');
+            },
+            
+            /* Drop and recreate the colors database */
+            populate_exec_sql: function(tx)
+            {			
+                // drop all tables;
+                tx.executeSql("select 'drop table ' || name || ';' from sqlite_master where type = 'table';");
+                for (var i = 0; i < lines.length; i++)
+                {
+                    var query = lines[i].replace(/\n/g, '');        // strip newline
+                    query && query.length && tx.executeSql(query); // ignore empty lines
+                }
+            },
+            
+            populate_db: function(lines)
+            {
+                db.transaction( database.populate_exec_sql, database.error_callback, database.success_callback );
+            },
+        }
+        
+        /* PhoneGap has been initialized and this function is called by the onDeviceReady event listener */
+        function onDeviceReady()
+        {
+            console.log('onDeviceReady()');
+            database.init();  // Global
+            database.read_file( SQL_DUMP_FILE, database.populate_db );
+            myScroll = new iScroll('scroller');
+        }
+        
+        /* Establish an event listener for when the Phonegap APIs are initialised and ready. */
+        function onBodyLoad()
+        {
+            document.addEventListener("deviceready", onDeviceReady, false);
+        }
+        
+        </script>
+    
+    </head>
+    <body onload="onBodyLoad()">
+        <h2>Demo to load a Safari WebSQL database from a text file of SQL statements created using the sqlite .dump command</h2>
+        <div id="wrapper">
+            <div id="scroller">
+                <ul>
+                    <li>...</li>
+                </ul>
+            </div>
+        </div>
+    </body>
+</html>
